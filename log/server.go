@@ -12,6 +12,7 @@ var log *stlog.Logger
 type fileLog string
 
 func (fl fileLog) Write(date []byte) (int, error) {
+	//没有文件并创建
 	file, err := os.OpenFile(string(fl), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return 0, err
@@ -21,6 +22,7 @@ func (fl fileLog) Write(date []byte) (int, error) {
 }
 
 func Run(destination string) {
+	//地址,前缀,日期时间
 	log = stlog.New(fileLog(destination), "go", stlog.Flags())
 }
 
@@ -39,6 +41,7 @@ func RegisterHandlers() {
 		}
 	})
 }
+
 func write(message string) {
 	log.Printf("%v\n", message)
 }
