@@ -7,6 +7,7 @@ import (
 	"os"
 )
 
+// 为日志文件做准备
 var log *stlog.Logger
 
 type fileLog string
@@ -21,6 +22,7 @@ func (fl fileLog) Write(date []byte) (int, error) {
 	return file.Write(date)
 }
 
+// Run 生成日志文件
 func Run(destination string) {
 	//地址,前缀,日期时间
 	log = stlog.New(fileLog(destination), "go", stlog.Flags())
