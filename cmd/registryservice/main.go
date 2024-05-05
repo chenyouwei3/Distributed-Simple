@@ -18,14 +18,13 @@ func main() {
 		log.Println(srv.ListenAndServe())
 		cancel()
 	}()
-
 	go func() {
-		fmt.Println("Registry service started,Press and key to stop")
+		fmt.Println("注册服务已经开始")
 		var s string
 		fmt.Scanln(&s)
 		srv.Shutdown(ctx)
 		cancel()
 	}()
 	<-ctx.Done()
-	fmt.Println("Shutting down registry service")
+	fmt.Println("注册服务已经关闭")
 }

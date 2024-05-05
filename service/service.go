@@ -1,30 +1,43 @@
 package service
 
 import (
+	"Distributed-Simple/registry"
 	"context"
 	"fmt"
 	"log"
 	"net/http"
 )
 
-func Start(ctx context.Context, serviceName, port string, registerHandlersFunc func()) (context.Context, error) {
+func Start(ctx context.Context, host, port string, reg registry.Registration, registerHandlersFunc func()) (context.Context, error) {
 	registerHandlersFunc()
-	ctx = startService(ctx, serviceName, port)
+	ctx = startService(ctx, reg.ServiceName, host, port)
+	err := registry.RegisterService(reg)
+	if err != nil {
+		return ctx, nil
+	}
 	return ctx, nil
 }
 
-func startService(ctx context.Context, serviceName, port string) context.Context {
+func startService(ctx context.Context, serviceName registry.ServiceName, host, port string) context.Context {
 	ctx, cancel := context.WithCancel(ctx)
 	var srv http.Server
 	srv.Addr = ":" + port
 	go func() {
 		log.Println(srv.ListenAndServe())
+		err := registry.ShutdownService(fmt.Sprintf("http://%s:%s", host, port))
+		if err != nil {
+			log.Println(err)
+		}
 		cancel()
 	}()
 	go func() {
 		fmt.Printf("%v 服务已经启动", serviceName)
 		var s string
 		fmt.Scanln(&s)
+		err := registry.ShutdownService(fmt.Sprintf("http://%s:%s", host, port))
+		if err != nil {
+			log.Println(err)
+		}
 		srv.Shutdown(ctx)
 		cancel()
 	}()
