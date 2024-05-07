@@ -6,7 +6,8 @@ type Registration struct {
 	ServiceName      ServiceName   //服务的name
 	ServiceURL       string        //服务的url
 	RequiredServices []ServiceName //当前服务依赖的其他服务
-	ServiceUpdateURL string        //中间件
+	ServiceUpdateURL string        //依赖更新请求地址
+	HeartBeatURL     string        //心跳协议地址
 }
 
 type ServiceName string

@@ -18,6 +18,7 @@ func main() {
 		ServiceURL:       serviceAddr,
 		RequiredServices: []registry.ServiceName{registry.LogService},
 		ServiceUpdateURL: serviceAddr + "/services",
+		HeartBeatURL:     serviceAddr + "/heartbeat",
 	}
 	ctx, err := service.Start(context.Background(),
 		host,
@@ -29,7 +30,7 @@ func main() {
 		stlog.Fatal(err)
 	}
 	if logProvider, err := registry.GetProvider(registry.LogService); err == nil {
-		fmt.Printf("Logging service found at: %s\n", logProvider)
+		fmt.Println("Logging service found at: %s\n", logProvider)
 		log.SetClientLogger(logProvider, r.ServiceName)
 	}
 	<-ctx.Done()

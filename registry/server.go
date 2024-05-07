@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const ServerPort = ":3000"
@@ -31,6 +32,7 @@ type RegistryService struct{}
 func (s RegistryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Println("收到注册服务请求")
 	switch r.Method {
+	//注册服务
 	case http.MethodPost:
 		dec := json.NewDecoder(r.Body)
 		var r Registration
@@ -40,13 +42,14 @@ func (s RegistryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		log.Printf("已添加服务: %v 地址:%s\n", r.ServiceName, r.ServiceURL)
+		log.Println("已添加服务:", r.ServiceName, "地址:", r.ServiceURL)
 		err = reg.add(r)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+	//注销服务
 	case http.MethodDelete:
 		payload, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -55,7 +58,7 @@ func (s RegistryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		url := string(payload)
-		log.Printf("已经删除服务:%s", url)
+		log.Println("已经删除服务:%s", url)
 		err = reg.remove(url)
 		if err != nil {
 			log.Println(err)
@@ -74,6 +77,7 @@ func (r *registry) add(reg Registration) error {
 	r.mutex.Unlock()
 	//添加依赖
 	err := r.sendRequiredServices(reg)
+	//通知变化
 	r.notify(patch{
 		Added: []patchEntry{
 			{
@@ -83,6 +87,61 @@ func (r *registry) add(reg Registration) error {
 		},
 	})
 	return err
+}
+
+func (r *registry) remove(url string) error {
+	for i := range reg.registrations {
+		if reg.registrations[i].ServiceURL == url {
+			//通知变化
+			r.notify(patch{
+				Removed: []patchEntry{
+					patchEntry{
+						Name: r.registrations[i].ServiceName,
+						URL:  r.registrations[i].ServiceURL,
+					},
+				},
+			})
+			//删除
+			r.mutex.Lock()
+			reg.registrations = append(reg.registrations[:i], reg.registrations[:i+1]...)
+			r.mutex.Unlock()
+			return nil
+		}
+	}
+	return fmt.Errorf("删除url失败:%s", url)
+}
+
+func (r *registry) heartBeat(freq time.Duration) {
+	for {
+		var wg sync.WaitGroup
+		for _, reg := range r.registrations {
+			wg.Add(1)
+			go func(reg Registration) {
+				defer wg.Done()
+				success := true
+				for attemps := 0; attemps < 3; attemps++ {
+					res, err := http.Get(reg.HeartBeatURL)
+					if err != nil {
+						log.Println(err)
+					} else if res.StatusCode == http.StatusOK {
+						log.Println("心跳检查已经通过:", reg.ServiceName)
+						if !success {
+							r.add(reg)
+						}
+						break
+					}
+					log.Println("心跳检查失败:", reg.ServiceName)
+					if success {
+						success = false
+						r.remove(reg.ServiceURL)
+					}
+					time.Sleep(time.Second * 1)
+				}
+			}(reg)
+			wg.Wait()
+			time.Sleep(freq)
+		}
+	}
 }
 
 func (r registry) notify(fullPatch patch) {
@@ -117,6 +176,7 @@ func (r registry) notify(fullPatch patch) {
 	}
 }
 
+// 添加依赖项
 func (r registry) sendRequiredServices(reg Registration) error {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -152,22 +212,10 @@ func (r registry) sendPatch(p patch, url string) error {
 	return nil
 }
 
-func (r *registry) remove(url string) error {
-	for i := range reg.registrations {
-		if reg.registrations[i].ServiceURL == url {
-			r.notify(patch{
-				Removed: []patchEntry{
-					patchEntry{
-						Name: r.registrations[i].ServiceName,
-						URL:  r.registrations[i].ServiceURL,
-					},
-				},
-			})
-			r.mutex.Lock()
-			reg.registrations = append(reg.registrations[:i], reg.registrations[:i+1]...)
-			r.mutex.Unlock()
-			return nil
-		}
-	}
-	return fmt.Errorf("删除url失败:%s", url)
+var once sync.Once
+
+func SetupRegistryService() {
+	once.Do(func() {
+		go reg.heartBeat(time.Second * 3)
+	})
 }

@@ -11,7 +11,22 @@ import (
 	"sync"
 )
 
+// 实例化一个包级变量
+var prov = providers{
+	services: make(map[ServiceName][]string),
+	mutex:    new(sync.RWMutex),
+}
+
+//逻辑
+
 func RegisterService(r Registration) error {
+	heartbeatURL, err := url.Parse(r.HeartBeatURL)
+	if err != nil {
+		return err
+	}
+	http.HandleFunc(heartbeatURL.Path, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	serviceUpdateURL, err := url.Parse(r.ServiceUpdateURL)
 	if err != nil {
 		return err
@@ -48,7 +63,7 @@ func (suh serviceUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	fmt.Printf("Update received %v\n", p)
+	fmt.Println("Update received %v\n", p)
 	prov.Update(p)
 }
 
@@ -82,7 +97,6 @@ func (p *providers) Update(pat patch) {
 			p.services[patchEntry.Name] = make([]string, 0)
 		}
 		p.services[patchEntry.Name] = append(p.services[patchEntry.Name], patchEntry.URL)
-
 	}
 	for _, patchEntry := range pat.Removed {
 		if providerURLs, ok := p.services[patchEntry.Name]; ok {
@@ -106,10 +120,4 @@ func (p providers) get(name ServiceName) (string, error) {
 
 func GetProvider(name ServiceName) (string, error) {
 	return prov.get(name)
-}
-
-// 实例化一个包级变量
-var prov = providers{
-	services: make(map[ServiceName][]string),
-	mutex:    new(sync.RWMutex),
 }
